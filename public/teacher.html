@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Portal - Secure Login</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            background-image: url('background.jpg.webp'); 
+            background-size: cover; 
+            background-position: center top; /* Keeps the top logo and university name visible */
+            background-attachment: fixed; 
+            padding: 20px; 
+            margin: 0;
+            display: flex;
+            align-items: center;
+            min-height: 100vh; /* Centers card vertically */
+            box-sizing: border-box;
+        }
+        
+        .card { 
+            max-width: 480px; 
+            width: 100%;
+            /* Moves the login card to the left side of the screen */
+            margin: 0 5% 0 auto; 
+            
+            /* Light Blending: Modern semi-transparent frosted glass design */
+            background: rgba(255, 255, 255, 0.85); 
+            backdrop-filter: blur(10px); /* Blurs the wallpaper behind the card */
+            -webkit-backdrop-filter: blur(10px);
+            
+            padding: 30px; 
+            border-radius: 12px; 
+            box-shadow: 0 12px 24px rgba(0,0,0,0.3); 
+            border: 1px solid rgba(255, 255, 255, 0.3); /* Adds a light border glow */
+        }
+        
+        input, select, button { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 10px 0; 
+            box-sizing: border-box; 
+            border-radius: 6px; 
+            border: 1px solid #ccc; 
+        }
+        button { 
+            background-color: #007bff; 
+            color: white; 
+            border: none; 
+            cursor: pointer; 
+            font-size: 16px; 
+            font-weight: bold;
+        }
+        button:hover { 
+            background-color: #0056b3; 
+        }
+        .hidden { 
+            display: none !important; 
+        }
+        .subject-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .present { 
+            color: green; 
+            font-weight: bold; 
+        }
+        .absent { 
+            color: red; 
+            font-weight: bold; 
+        }
+        
+        /* Teacher Portal styles (safe to leave here or combine) */
+        .btn-group { display: flex; gap: 8px; }
+        .toggle-btn { width: auto; padding: 6px 14px; margin: 0; border: 1px solid #ccc; cursor: pointer; font-weight: bold; background-color: #f8f9fa; color: #333; border-radius: 4px; }
+        .toggle-btn.present-active { background-color: #28a745; color: white; border-color: #28a745; }
+        .toggle-btn.absent-active { background-color: #dc3545; color: white; border-color: #dc3545; }
+        .badge-locked { background-color: #dc3545; color: white; padding: 10px; text-align: center; font-weight: bold; border-radius: 4px; margin: 10px 0; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 999; }
+        .modal-card { background: white; width: 90%; max-width: 500px; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .absentee-list { max-height: 250px; overflow-y: auto; background: #fff3f3; border: 1px solid #f5c6cb; padding: 10px 15px; border-radius: 6px; margin: 15px 0; }
+        .absentee-item { padding: 6px 0; border-bottom: 1px dashed #f5c6cb; color: #721c24; font-weight: 500; }
+        .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .btn-cancel { background-color: #6c757d; color: white; border: none; cursor: pointer; }
+        .btn-confirm { background-color: #dc3545; color: white; border: none; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <!-- Teacher Login -->
+    <div id="login-section" class="card">
+        <h2>Teacher Portal Secure Login</h2>
+        <input type="text" id="teacher-id" placeholder="Teacher ID (e.g., tejaswini, nataraj)">
+        <input type="password" id="password" placeholder="Password (default: teacher123)">
+        <button id="login-btn" class="primary-btn">Secure Login</button>
+        <p style="text-align: center; margin-top: 15px;"><a href="index.html">Are you a Student? Go Back</a></p>
+    </div>
+
+    <!-- Teacher Dashboard -->
+    <div id="dashboard-section" class="card hidden">
+        <h2>Teacher Dashboard</h2>
+        <p>Logged in as: <strong id="teacher-name"></strong></p>
+        <hr>
+
+        <label for="class-date">Choose Class Date:</label>
+        <input type="date" id="class-date">
+
+        <label for="subject-select">Your Authorized Subject:</label>
+        <select id="subject-select"></select>
+
+        <label for="section-select">Select Target Section:</label>
+        <select id="section-select">
+            <option value="">--Select Section--</option>
+            <option value="1ads03">1ads03</option>
+        </select>
+
+        <button id="load-btn" class="primary-btn" style="background-color: #007bff;">Load Attendance Sheet</button>
+
+        <div id="lock-banner" class="badge-locked hidden">🔒 ATTENDANCE SHEET LOCKED (Cannot Edit)</div>
+
+        <div id="attendance-sheet" style="margin-top: 20px;"></div>
+
+        <button id="submit-btn" class="primary-btn hidden">Review & Lock Attendance</button>
+    </div>
+
+    <!-- Absentee Confirmation Modal -->
+    <div id="confirmation-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <h3 style="margin-top: 0; color: #dc3545;">⚠️ Review Absentee List</h3>
+            <p>Please double-check the absent students before submitting. Once submitted, <strong>records cannot be modified</strong>.</p>
+            
+            <div id="absentee-container" class="absentee-list"></div>
+
+            <div class="modal-actions">
+                <button type="button" id="modal-cancel-btn" class="btn-cancel">Cancel & Edit</button>
+                <button type="button" id="modal-confirm-btn" class="btn-confirm">Confirm & Lock Attendance</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Set default calendar date to today
+        document.getElementById('class-date').value = new Date().toLocaleDateString('sv-SE');
+
+        var teacherSubjects = [];
+
+        // Teacher Login Handler
+        document.getElementById('login-btn').addEventListener('click', function() {
+            var id = document.getElementById('teacher-id').value.trim();
+            var password = document.getElementById('password').value;
+
+            fetch('/api/teacher/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ teacher_id: id, password: password })
+            })
+            .then(function(res) {
+                if (res.ok) {
+                    return res.json();
+                } else {
+                    throw new Error("Invalid login");
+                }
+            })
+            .then(function(data) {
+                document.getElementById('login-section').classList.add('hidden');
+                document.getElementById('dashboard-section').classList.remove('hidden');
+                document.getElementById('teacher-name').innerText = data.teacher.name;
+                
+                // Load subjects into dropdown
+                var subjectSelect = document.getElementById('subject-select');
+                subjectSelect.innerHTML = '';
+                
+                if (data.teacher.subjects) {
+                    teacherSubjects = data.teacher.subjects.split(', ');
+                    teacherSubjects.forEach(function(sub) {
+                        var opt = document.createElement('option');
+                        opt.value = sub;
+                        opt.innerText = sub;
+                        subjectSelect.appendChild(opt);
+                    });
+                }
+            })
+            .catch(function(err) {
+                alert("Incorrect teacher credentials!");
+            });
+        });
+
+        // Load Attendance Sheet
+        document.getElementById('load-btn').addEventListener('click', function() {
+            var section = document.getElementById('section-select').value;
+            var date = document.getElementById('class-date').value;
+            var subject = document.getElementById('subject-select').value;
+
+            if (!section || !date || !subject) {
+                return alert("Please select subject, section, and date.");
+            }
+
+            fetch("/api/attendance/section-status?section=" + section + "&date=" + date + "&subject=" + subject)
+            .then(function(res) {
+                return res.json();
+            })
+            .then(function(data) {
+                var sheet = document.getElementById('attendance-sheet');
+                var submitBtn = document.getElementById('submit-btn');
+                var lockBanner = document.getElementById('lock-banner');
+
+                sheet.innerHTML = "";
+                submitBtn.classList.add('hidden');
+                lockBanner.classList.add('hidden');
+
+                if (data.locked) {
+                    lockBanner.classList.remove('hidden');
+                    data.records.forEach(function(record) {
+                        var row = document.createElement('div');
+                        row.className = 'student-row';
+                        row.innerHTML = "<span>" + record.srn + "</span><span><strong>" + record.status + "</strong></span>";
+                        sheet.appendChild(row);
+                    });
+                } else {
+                    submitBtn.classList.remove('hidden');
+                    data.students.forEach(function(student) {
+                        var row = document.createElement('div');
+                        row.className = 'student-row';
+                        row.setAttribute('data-srn', student.srn);
+                        row.setAttribute('data-name', student.name);
+                        row.setAttribute('data-status', 'Present'); // Default Present
+
+                        row.innerHTML = "<span>" + student.name + " (" + student.srn + ")</span>" +
+                                        "<div class=\"btn-group\">" +
+                                        "<button type=\"button\" class=\"toggle-btn present-btn present-active\" onclick=\"setRowStatus(this, 'Present')\">Present</button>" +
+                                        "<button type=\"button\" class=\"toggle-btn absent-btn\" onclick=\"setRowStatus(this, 'Absent')\">Absent</button>" +
+                                        "</div>";
+                        sheet.appendChild(row);
+                    });
+                }
+            });
+        });
+
+        // Function to toggle between Present and Absent states
+        window.setRowStatus = function(btnElement, status) {
+            var row = btnElement.closest('.student-row');
+            row.setAttribute('data-status', status);
+
+            var presentBtn = row.querySelector('.present-btn');
+            var absentBtn = row.querySelector('.absent-btn');
+
+            if (status === 'Present') {
+                presentBtn.classList.add('present-active');
+                absentBtn.classList.remove('absent-active');
+            } else {
+                absentBtn.classList.add('absent-active');
+                presentBtn.classList.remove('present-active');
+            }
+        };
+
+        // Open Confirmation Modal to Review Absentees
+        document.getElementById('submit-btn').addEventListener('click', function() {
+            var rows = document.querySelectorAll('.student-row');
+            var absenteeContainer = document.getElementById('absentee-container');
+            absenteeContainer.innerHTML = "";
+
+            var absentees = [];
+            rows.forEach(function(row) {
+                if (row.getAttribute('data-status') === 'Absent') {
+                    absentees.push({
+                        srn: row.getAttribute('data-srn'),
+                        name: row.getAttribute('data-name')
+                    });
+                }
+            });
+
+            if (absentees.length === 0) {
+                absenteeContainer.innerHTML = "<p style=\"color: green; font-weight: bold; margin: 0;\">🎉 All students are marked Present! (0 Absentees)</p>";
+            } else {
+                absentees.forEach(function(student) {
+                    var item = document.createElement('div');
+                    item.className = 'absentee-item';
+                    item.innerText = "❌ " + student.name + " (" + student.srn + ")";
+                    absenteeContainer.appendChild(item);
+                });
+            }
+
+            document.getElementById('confirmation-modal').classList.remove('hidden');
+        });
+
+        // Close Modal
+        document.getElementById('modal-cancel-btn').addEventListener('click', function() {
+            document.getElementById('confirmation-modal').classList.add('hidden');
+        });
+
+        // Confirm & Final Submission
+        document.getElementById('modal-confirm-btn').addEventListener('click', function() {
+            var section = document.getElementById('section-select').value;
+            var date = document.getElementById('class-date').value;
+            var subject = document.getElementById('subject-select').value;
+            var rows = document.querySelectorAll('.student-row');
+            
+            var records = [];
+            rows.forEach(function(row) {
+                records.push({
+                    srn: row.getAttribute('data-srn'),
+                    status: row.getAttribute('data-status')
+                });
+            });
+
+            fetch('/api/attendance/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ section: section, date: date, subject: subject, records: records })
+            })
+            .then(function(res) {
+                if (res.ok) {
+                    alert("Attendance successfully locked!");
+                    document.getElementById('confirmation-modal').classList.add('hidden');
+                    document.getElementById('load-btn').click(); // Refresh sheet
+                } else {
+                    return res.json().then(function(data) {
+                        throw new Error(data.message || "An error occurred.");
+                    });
+                }
+            })
+            .catch(function(err) {
+                alert(err.message);
+            });
+        });
+    </script>
+</body>
+</html>

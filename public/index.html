@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Attendance Portal</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            background-image: url('background.jpg.webp'); 
+            background-size: cover; 
+            background-position: center top; /* Keeps the top logo and university name visible */
+            background-attachment: fixed; 
+            padding: 20px; 
+            margin: 0;
+            display: flex;
+            align-items: center;
+            min-height: 100vh; /* Centers card vertically */
+            box-sizing: border-box;
+        }
+        
+        .card { 
+            max-width: 480px; 
+            width: 100%;
+            /* Moves the login card to the left side of the screen */
+            margin: 0 5% 0 auto; 
+            
+            /* Light Blending: Modern semi-transparent frosted glass design */
+            background: rgba(255, 255, 255, 0.85); 
+            backdrop-filter: blur(10px); /* Blurs the wallpaper behind the card */
+            -webkit-backdrop-filter: blur(10px);
+            
+            padding: 30px; 
+            border-radius: 12px; 
+            box-shadow: 0 12px 24px rgba(0,0,0,0.3); 
+            border: 1px solid rgba(255, 255, 255, 0.3); /* Adds a light border glow */
+        }
+        
+        input, select, button { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 10px 0; 
+            box-sizing: border-box; 
+            border-radius: 6px; 
+            border: 1px solid #ccc; 
+        }
+        button { 
+            background-color: #007bff; 
+            color: white; 
+            border: none; 
+            cursor: pointer; 
+            font-size: 16px; 
+            font-weight: bold;
+        }
+        button:hover { 
+            background-color: #0056b3; 
+        }
+        .hidden { 
+            display: none !important; 
+        }
+        .subject-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .present { 
+            color: green; 
+            font-weight: bold; 
+        }
+        .absent { 
+            color: red; 
+            font-weight: bold; 
+        }
+        
+        /* Teacher Portal styles (safe to leave here or combine) */
+        .btn-group { display: flex; gap: 8px; }
+        .toggle-btn { width: auto; padding: 6px 14px; margin: 0; border: 1px solid #ccc; cursor: pointer; font-weight: bold; background-color: #f8f9fa; color: #333; border-radius: 4px; }
+        .toggle-btn.present-active { background-color: #28a745; color: white; border-color: #28a745; }
+        .toggle-btn.absent-active { background-color: #dc3545; color: white; border-color: #dc3545; }
+        .badge-locked { background-color: #dc3545; color: white; padding: 10px; text-align: center; font-weight: bold; border-radius: 4px; margin: 10px 0; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 999; }
+        .modal-card { background: white; width: 90%; max-width: 500px; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .absentee-list { max-height: 250px; overflow-y: auto; background: #fff3f3; border: 1px solid #f5c6cb; padding: 10px 15px; border-radius: 6px; margin: 15px 0; }
+        .absentee-item { padding: 6px 0; border-bottom: 1px dashed #f5c6cb; color: #721c24; font-weight: 500; }
+        .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .btn-cancel { background-color: #6c757d; color: white; border: none; cursor: pointer; }
+        .btn-confirm { background-color: #dc3545; color: white; border: none; cursor: pointer; font-weight: bold; }
+    </style>
+       
+</head>
+<body>
+
+    <!-- Student Login -->
+    <div id="login-section" class="card">
+        <h2>Student Portal Access</h2>
+        
+        <label for="srn-input">Enter SRN Number:</label>
+        <input type="text" id="srn-input" placeholder="e.g. SRN001">
+        
+        <label for="name-input">Name (Auto-generated):</label>
+        <input type="text" id="name-input" readonly placeholder="Enter SRN first..." style="background-color: #e9ecef;">
+        
+        <button id="login-btn">Go to Dashboard</button>
+        <p style="text-align: center; margin-top: 15px;">
+            <a href="teacher.html">Are you a Teacher? Login Here</a>
+        </p>
+    </div>
+
+    <!-- Student Dashboard -->
+    <div id="dashboard-section" class="card hidden">
+        <h2 id="welcome-msg">Welcome, Student</h2>
+        <p><strong>Section:</strong> <span id="student-section"></span></p>
+        <hr>
+        <h3>Check Attendance Calendar</h3>
+        <label for="attendance-date-picker">Select Date:</label>
+        <input type="date" id="attendance-date-picker">
+        
+        <h4 style="margin-top: 20px;">Subject-wise Attendance Status:</h4>
+        <div id="attendance-status-list"></div>
+    </div>
+
+    <script>
+        var srnInput = document.getElementById('srn-input');
+        var nameInput = document.getElementById('name-input');
+        var loginBtn = document.getElementById('login-btn');
+        var currentStudent = null;
+
+        // Auto-fill student name when SRN is typed
+        srnInput.addEventListener('input', function() {
+            var srnValue = srnInput.value.trim().toUpperCase();
+            if (srnValue.length >= 3) {
+                fetch("/api/student/" + srnValue)
+                    .then(function(res) {
+                        if (res.ok) {
+                            return res.json();
+                        } else {
+                            throw new Error("Student not found");
+                        }
+                    })
+                    .then(function(data) {
+                        nameInput.value = data.name;
+                        currentStudent = {
+                            srn: srnValue,
+                            name: data.name,
+                            section: data.section
+                        };
+                    })
+                    .catch(function(err) {
+                        nameInput.value = "";
+                        currentStudent = null;
+                    });
+            } else {
+                nameInput.value = "";
+                currentStudent = null;
+            }
+        });
+
+        // Enter Dashboard
+        loginBtn.addEventListener('click', function() {
+            if (!currentStudent) {
+                return alert("Please enter a valid SRN.");
+            }
+            document.getElementById('login-section').classList.add('hidden');
+            document.getElementById('dashboard-section').classList.remove('hidden');
+            document.getElementById('welcome-msg').innerText = "Welcome, " + currentStudent.name;
+            document.getElementById('student-section').innerText = currentStudent.section;
+            
+            // Set current local date automatically (YYYY-MM-DD format)
+            var localDate = new Date().toLocaleDateString('sv-SE'); 
+            document.getElementById('attendance-date-picker').value = localDate;
+            checkAttendance(localDate);
+        });
+
+        // Date selector handler
+        document.getElementById('attendance-date-picker').addEventListener('change', function(e) {
+            checkAttendance(e.target.value);
+        });
+
+        function checkAttendance(date) {
+            var statusListDiv = document.getElementById('attendance-status-list');
+            statusListDiv.innerHTML = "<em>Loading records...</em>";
+
+            fetch("/api/attendance/student/" + currentStudent.srn + "?date=" + date)
+                .then(function(res) {
+                    return res.json();
+                })
+                .then(function(data) {
+                    statusListDiv.innerHTML = "";
+                    if (data.length > 0) {
+                        data.forEach(function(record) {
+                            var row = document.createElement('div');
+                            row.className = 'subject-row';
+                            
+                            var statusClass = record.status.toLowerCase(); // 'present' or 'absent'
+                            
+                            row.innerHTML = "<span><strong>" + record.subject + "</strong></span>" +
+                                            "<span class=\"" + statusClass + "\">" + record.status + "</span>";
+                            statusListDiv.appendChild(row);
+                        });
+                    } else {
+                        statusListDiv.innerHTML = "<div style=\"color: gray; padding: 10px 0;\">No attendance recorded on " + date + " / Holiday</div>";
+                    }
+                })
+                .catch(function(err) {
+                    console.error("Error checking attendance:", err);
+                    statusListDiv.innerHTML = "<span style=\"color: red;\">Failed to retrieve records.</span>";
+                });
+        }
+    </script>
+</body>
+</html>
